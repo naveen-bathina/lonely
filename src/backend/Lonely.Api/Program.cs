@@ -1,7 +1,9 @@
 using Lonely.Api.Auth;
+using Lonely.Api.Profiles;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddSingleton<IAuthService, AuthService>();
+builder.Services.AddSingleton<IProfileService, ProfileService>();
 
 var app = builder.Build();
 app.UseHttpsRedirection();
@@ -60,6 +62,44 @@ app.MapPost("/api/v1/auth/login", async (LoginRequest request, IAuthService auth
     {
         return Results.Unauthorized();
     }
+});
+
+app.MapPut("/api/v1/profiles/{userId}", async (string userId, UpsertProfileRequest request, IProfileService profileService) =>
+{
+    var profile = await profileService.Upsert(userId, request);
+    return Results.Ok(new { userId = profile.UserId, isComplete = profile.IsComplete, badges = profile.Badges });
+});
+
+app.MapGet("/api/v1/profiles/{userId}", async (string userId, IProfileService profileService) =>
+{
+    var profile = await profileService.Get(userId);
+    return profile is null ? Results.NotFound() : Results.Ok(profile);
+});
+
+app.MapPatch("/api/v1/profiles/{userId}/photos/{photoId}/status",
+    async (string userId, string photoId, PhotoStatusRequest request, IProfileService profileService) =>
+    {
+        var photo = await profileService.UpdatePhotoStatus(userId, photoId, request.Status);
+        return Results.Ok(new { photo.PhotoId, photo.Status });
+    });
+
+app.MapGet("/api/v1/profiles/{userId}/photos", async (string userId, bool? visible, IProfileService profileService) =>
+{
+    var photos = await profileService.GetPhotos(userId, visible ?? false);
+    return Results.Ok(photos.Select(p => new { photoId = p.PhotoId, status = p.Status }));
+});
+
+app.MapGet("/api/v1/discover", async (IProfileService profileService) =>
+{
+    var feed = await profileService.GetDiscoverFeed();
+    return Results.Ok(feed);
+});
+
+app.MapPost("/api/v1/profiles/{userId}/photos", async (string userId, PhotoUploadRequest request, IProfileService profileService) =>
+{
+    var photo = await profileService.UploadPhoto(userId, request);
+    return Results.Accepted($"/api/v1/profiles/{userId}/photos/{photo.PhotoId}",
+        new { photoId = photo.PhotoId, status = photo.Status });
 });
 
 app.Run();

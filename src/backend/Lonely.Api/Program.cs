@@ -1,9 +1,11 @@
 using Lonely.Api.Auth;
+using Lonely.Api.Discovery;
 using Lonely.Api.Profiles;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddSingleton<IAuthService, AuthService>();
 builder.Services.AddSingleton<IProfileService, ProfileService>();
+builder.Services.AddSingleton<IDiscoveryService, DiscoveryService>();
 
 var app = builder.Build();
 app.UseHttpsRedirection();
@@ -94,6 +96,49 @@ app.MapGet("/api/v1/discover", async (IProfileService profileService) =>
     var feed = await profileService.GetDiscoverFeed();
     return Results.Ok(feed);
 });
+
+app.MapGet("/api/v1/discover/recommendations", async (string userId, IDiscoveryService discoveryService) =>
+{
+    var recommendations = await discoveryService.GetRecommendations(userId);
+    return Results.Ok(recommendations);
+});
+
+app.MapPost("/api/v1/discover/{userId}/preferences",
+    async (string userId, SetPreferencesRequest request, IDiscoveryService discoveryService) =>
+    {
+        await discoveryService.SetPreferences(userId, request);
+        return Results.Ok();
+    });
+
+app.MapPost("/api/v1/discover/{userId}/like/{targetId}",
+    async (string userId, string targetId, IDiscoveryService discoveryService) =>
+    {
+        var match = await discoveryService.Like(userId, targetId);
+        return match is null
+            ? Results.NoContent()
+            : Results.Ok(new { matchId = match.MatchId, user1Id = match.User1Id, user2Id = match.User2Id });
+    });
+
+app.MapPost("/api/v1/discover/{userId}/pass/{targetId}",
+    async (string userId, string targetId, IDiscoveryService discoveryService) =>
+    {
+        await discoveryService.Pass(userId, targetId);
+        return Results.NoContent();
+    });
+
+app.MapPost("/api/v1/users/{userId}/block/{targetId}",
+    async (string userId, string targetId, IDiscoveryService discoveryService) =>
+    {
+        await discoveryService.Block(userId, targetId);
+        return Results.NoContent();
+    });
+
+app.MapPost("/api/v1/profiles/{userId}/questionnaire",
+    async (string userId, QuestionnaireRequest request, IDiscoveryService discoveryService) =>
+    {
+        await discoveryService.SaveQuestionnaire(userId, request);
+        return Results.Ok();
+    });
 
 app.MapPost("/api/v1/profiles/{userId}/photos", async (string userId, PhotoUploadRequest request, IProfileService profileService) =>
 {

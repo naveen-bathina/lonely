@@ -1,0 +1,17 @@
+# .NET
+src/backend/**/bin/
+src/backend/**/obj/
+*.user
+*.suo
+.vs/
+
+# Flutter / Dart
+src/mobile/.dart_tool/
+src/mobile/.flutter-plugins
+src/mobile/.flutter-plugins-dependencies
+src/mobile/build/
+src/mobile/.packages
+
+# General
+.DS_Store
+Thumbs.db

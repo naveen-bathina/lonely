@@ -1,5 +1,6 @@
 using Lonely.Api.Auth;
 using Lonely.Api.Discovery;
+using Lonely.Api.Meetup;
 using Lonely.Api.Messaging;
 using Lonely.Api.Moderation;
 using Lonely.Api.Profiles;
@@ -10,6 +11,7 @@ builder.Services.AddSingleton<IProfileService, ProfileService>();
 builder.Services.AddSingleton<IDiscoveryService, DiscoveryService>();
 builder.Services.AddSingleton<IMessageService, MessageService>();
 builder.Services.AddSingleton<IModerationService, ModerationService>();
+builder.Services.AddSingleton<IMeetupService, MeetupService>();
 
 var app = builder.Build();
 app.UseHttpsRedirection();
@@ -248,6 +250,90 @@ app.MapMethods("/api/v1/admin/moderation-queue/{reportId}/remove", new[] { "PATC
     {
         var report = await moderationService.Resolve(reportId, "removed");
         return Results.Ok(new { reportId = report.ReportId, status = report.Status });
+    });
+
+// ── Phase 6: Meetup Proposal ─────────────────────────────────────────────────
+
+app.MapPost("/api/v1/meetups", async (ProposeMeetupRequest request, IMeetupService meetupService) =>
+{
+    try
+    {
+        var proposal = await meetupService.Propose(request);
+        return Results.Created($"/api/v1/meetups/{proposal.ProposalId}", new
+        {
+            proposalId = proposal.ProposalId,
+            proposerId = proposal.ProposerId,
+            matchId = proposal.MatchId,
+            state = proposal.State,
+            expiresAt = proposal.ExpiresAt
+        });
+    }
+    catch (InvalidOperationException ex)
+    {
+        return Results.Conflict(new { error = ex.Message });
+    }
+});
+
+app.MapGet("/api/v1/meetups/{proposalId}", async (string proposalId, IMeetupService meetupService) =>
+{
+    try
+    {
+        var proposal = await meetupService.GetProposal(proposalId);
+        return Results.Ok(new
+        {
+            proposalId = proposal.ProposalId,
+            proposerId = proposal.ProposerId,
+            matchId = proposal.MatchId,
+            state = proposal.State,
+            expiresAt = proposal.ExpiresAt
+        });
+    }
+    catch (KeyNotFoundException)
+    {
+        return Results.NotFound();
+    }
+});
+
+app.MapMethods("/api/v1/meetups/{proposalId}/accept", new[] { "PATCH" },
+    async (string proposalId, IMeetupService meetupService) =>
+    {
+        try
+        {
+            var proposal = await meetupService.Accept(proposalId);
+            return Results.Ok(new { proposalId = proposal.ProposalId, state = proposal.State });
+        }
+        catch (KeyNotFoundException)
+        {
+            return Results.NotFound();
+        }
+    });
+
+app.MapMethods("/api/v1/meetups/{proposalId}/decline", new[] { "PATCH" },
+    async (string proposalId, IMeetupService meetupService) =>
+    {
+        try
+        {
+            var proposal = await meetupService.Decline(proposalId);
+            return Results.Ok(new { proposalId = proposal.ProposalId, state = proposal.State });
+        }
+        catch (KeyNotFoundException)
+        {
+            return Results.NotFound();
+        }
+    });
+
+app.MapMethods("/api/v1/meetups/{proposalId}/expire", new[] { "PATCH" },
+    async (string proposalId, IMeetupService meetupService) =>
+    {
+        try
+        {
+            var proposal = await meetupService.Expire(proposalId);
+            return Results.Ok(new { proposalId = proposal.ProposalId, state = proposal.State });
+        }
+        catch (KeyNotFoundException)
+        {
+            return Results.NotFound();
+        }
     });
 
 app.Run();

@@ -76,6 +76,32 @@ app.MapGet("/api/v1/profiles/{userId}", async (string userId, IProfileService pr
     return profile is null ? Results.NotFound() : Results.Ok(profile);
 });
 
+app.MapPatch("/api/v1/profiles/{userId}/photos/{photoId}/status",
+    async (string userId, string photoId, PhotoStatusRequest request, IProfileService profileService) =>
+    {
+        var photo = await profileService.UpdatePhotoStatus(userId, photoId, request.Status);
+        return Results.Ok(new { photo.PhotoId, photo.Status });
+    });
+
+app.MapGet("/api/v1/profiles/{userId}/photos", async (string userId, bool? visible, IProfileService profileService) =>
+{
+    var photos = await profileService.GetPhotos(userId, visible ?? false);
+    return Results.Ok(photos.Select(p => new { photoId = p.PhotoId, status = p.Status }));
+});
+
+app.MapGet("/api/v1/discover", async (IProfileService profileService) =>
+{
+    var feed = await profileService.GetDiscoverFeed();
+    return Results.Ok(feed);
+});
+
+app.MapPost("/api/v1/profiles/{userId}/photos", async (string userId, PhotoUploadRequest request, IProfileService profileService) =>
+{
+    var photo = await profileService.UploadPhoto(userId, request);
+    return Results.Accepted($"/api/v1/profiles/{userId}/photos/{photo.PhotoId}",
+        new { photoId = photo.PhotoId, status = photo.Status });
+});
+
 app.Run();
 
 public partial class Program { }

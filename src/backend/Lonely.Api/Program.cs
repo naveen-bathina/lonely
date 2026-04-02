@@ -1,6 +1,7 @@
 using Lonely.Api.Auth;
 using Lonely.Api.Discovery;
 using Lonely.Api.Messaging;
+using Lonely.Api.Moderation;
 using Lonely.Api.Profiles;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -8,6 +9,7 @@ builder.Services.AddSingleton<IAuthService, AuthService>();
 builder.Services.AddSingleton<IProfileService, ProfileService>();
 builder.Services.AddSingleton<IDiscoveryService, DiscoveryService>();
 builder.Services.AddSingleton<IMessageService, MessageService>();
+builder.Services.AddSingleton<IModerationService, ModerationService>();
 
 var app = builder.Build();
 app.UseHttpsRedirection();
@@ -201,6 +203,51 @@ app.MapGet("/api/v1/messages/{matchId}/ghosting-status",
         {
             return Results.NotFound(new { error = "Match not found." });
         }
+    });
+
+app.MapPost("/api/v1/reports",
+    async (SubmitReportRequest request, IModerationService moderationService) =>
+    {
+        var report = await moderationService.SubmitReport(request);
+        return Results.Created($"/api/v1/reports/{report.ReportId}",
+            new { reportId = report.ReportId, reporterId = report.ReporterId,
+                  targetId = report.TargetId, reason = report.Reason, status = report.Status });
+    });
+
+app.MapGet("/api/v1/reports",
+    async (string userId, IModerationService moderationService) =>
+    {
+        var history = await moderationService.GetHistory(userId);
+        return Results.Ok(history.Select(r => new
+        {
+            reportId = r.ReportId, reporterId = r.ReporterId,
+            targetId = r.TargetId, reason = r.Reason, status = r.Status
+        }));
+    });
+
+app.MapGet("/api/v1/admin/moderation-queue",
+    async (IModerationService moderationService) =>
+    {
+        var queue = await moderationService.GetQueue();
+        return Results.Ok(queue.Select(r => new
+        {
+            reportId = r.ReportId, reporterId = r.ReporterId,
+            targetId = r.TargetId, reason = r.Reason, status = r.Status
+        }));
+    });
+
+app.MapMethods("/api/v1/admin/moderation-queue/{reportId}/approve", new[] { "PATCH" },
+    async (string reportId, IModerationService moderationService) =>
+    {
+        var report = await moderationService.Resolve(reportId, "approved");
+        return Results.Ok(new { reportId = report.ReportId, status = report.Status });
+    });
+
+app.MapMethods("/api/v1/admin/moderation-queue/{reportId}/remove", new[] { "PATCH" },
+    async (string reportId, IModerationService moderationService) =>
+    {
+        var report = await moderationService.Resolve(reportId, "removed");
+        return Results.Ok(new { reportId = report.ReportId, status = report.Status });
     });
 
 app.Run();

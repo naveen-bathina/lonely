@@ -1,11 +1,13 @@
 using Lonely.Api.Auth;
 using Lonely.Api.Discovery;
+using Lonely.Api.Messaging;
 using Lonely.Api.Profiles;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddSingleton<IAuthService, AuthService>();
 builder.Services.AddSingleton<IProfileService, ProfileService>();
 builder.Services.AddSingleton<IDiscoveryService, DiscoveryService>();
+builder.Services.AddSingleton<IMessageService, MessageService>();
 
 var app = builder.Build();
 app.UseHttpsRedirection();
@@ -146,6 +148,60 @@ app.MapPost("/api/v1/profiles/{userId}/photos", async (string userId, PhotoUploa
     return Results.Accepted($"/api/v1/profiles/{userId}/photos/{photo.PhotoId}",
         new { photoId = photo.PhotoId, status = photo.Status });
 });
+
+app.MapPost("/api/v1/messages/{matchId}",
+    async (string matchId, SendMessageRequest request, IMessageService messageService) =>
+    {
+        try
+        {
+            var msg = await messageService.Send(matchId, request);
+            return Results.Created($"/api/v1/messages/{matchId}/{msg.MessageId}",
+                new { messageId = msg.MessageId, matchId = msg.MatchId, senderId = msg.SenderId, text = msg.Text, sentAt = msg.SentAt, readAt = msg.ReadAt });
+        }
+        catch (MatchNotFoundException)
+        {
+            return Results.NotFound(new { error = "Match not found." });
+        }
+    });
+
+app.MapGet("/api/v1/messages/{matchId}",
+    async (string matchId, string? viewerId, IMessageService messageService) =>
+    {
+        try
+        {
+            var messages = await messageService.GetThread(matchId, viewerId);
+            return Results.Ok(messages.Select(m => new
+            {
+                messageId = m.MessageId, senderId = m.SenderId, text = m.Text,
+                sentAt = m.SentAt, readAt = m.ReadAt
+            }));
+        }
+        catch (MatchNotFoundException)
+        {
+            return Results.NotFound(new { error = "Match not found." });
+        }
+    });
+
+app.MapMethods("/api/v1/messages/{matchId}/settings", new[] { "PATCH" },
+    async (string matchId, ReadReceiptsSettingsRequest request, IMessageService messageService) =>
+    {
+        await messageService.SetReadReceipts(matchId, request);
+        return Results.Ok();
+    });
+
+app.MapGet("/api/v1/messages/{matchId}/ghosting-status",
+    async (string matchId, string userId, int thresholdHours, IMessageService messageService) =>
+    {
+        try
+        {
+            var status = await messageService.GetGhostingStatus(matchId, userId, thresholdHours);
+            return Results.Ok(new { isIdle = status.IsIdle, idleHours = status.IdleHours });
+        }
+        catch (MatchNotFoundException)
+        {
+            return Results.NotFound(new { error = "Match not found." });
+        }
+    });
 
 app.Run();
 

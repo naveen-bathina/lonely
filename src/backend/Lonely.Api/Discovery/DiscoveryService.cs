@@ -18,6 +18,7 @@ public interface IDiscoveryService
     Task<MatchResponse?> Like(string userId, string targetId);
     Task Pass(string userId, string targetId);
     Task Block(string userId, string targetId);
+    Task<bool> MatchExists(string matchId);
 }
 
 public class DiscoveryService : IDiscoveryService
@@ -112,6 +113,9 @@ public class DiscoveryService : IDiscoveryService
         _blocks[userId].Add(targetId);
         return Task.CompletedTask;
     }
+
+    public Task<bool> MatchExists(string matchId) =>
+        Task.FromResult(_matches.ContainsKey(matchId));
 
     private static int ComputeScore(SetPreferencesRequest? prefs, Dictionary<string, string>? questionnaire)
     {

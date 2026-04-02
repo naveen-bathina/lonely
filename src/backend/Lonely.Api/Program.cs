@@ -1,7 +1,9 @@
 using Lonely.Api.Auth;
+using Lonely.Api.Profiles;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddSingleton<IAuthService, AuthService>();
+builder.Services.AddSingleton<IProfileService, ProfileService>();
 
 var app = builder.Build();
 app.UseHttpsRedirection();
@@ -60,6 +62,18 @@ app.MapPost("/api/v1/auth/login", async (LoginRequest request, IAuthService auth
     {
         return Results.Unauthorized();
     }
+});
+
+app.MapPut("/api/v1/profiles/{userId}", async (string userId, UpsertProfileRequest request, IProfileService profileService) =>
+{
+    var profile = await profileService.Upsert(userId, request);
+    return Results.Ok(new { userId = profile.UserId, isComplete = profile.IsComplete, badges = profile.Badges });
+});
+
+app.MapGet("/api/v1/profiles/{userId}", async (string userId, IProfileService profileService) =>
+{
+    var profile = await profileService.Get(userId);
+    return profile is null ? Results.NotFound() : Results.Ok(profile);
 });
 
 app.Run();
